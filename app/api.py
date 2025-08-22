@@ -1,0 +1,41 @@
+from fastapi import FastAPI, Query, HTTPException
+from . import data_store
+from .tcp_server import last_report_time, arm_zone, disarm_zone
+
+app = FastAPI(title="Alarm Host API", version="1.0.0")
+
+@app.get("/zones")
+def get_zones():
+    return data_store.fetch_zones()
+
+@app.get("/zone-status")
+def get_zone_status():
+    return data_store.fetch_zone_status()
+
+@app.get("/events")
+def get_events(limit: int = Query(50, ge=1, le=1000)):
+    return data_store.fetch_events(limit=limit)
+
+
+@app.post("/zones/{zone_id}/arm")
+def http_arm_zone(zone_id: int):
+    if not arm_zone(zone_id):
+        raise HTTPException(status_code=503, detail="alarm host not connected")
+    return {"zone_id": zone_id, "armed": True}
+
+
+@app.post("/zones/{zone_id}/disarm")
+def http_disarm_zone(zone_id: int):
+    if not disarm_zone(zone_id):
+        raise HTTPException(status_code=503, detail="alarm host not connected")
+    return {"zone_id": zone_id, "armed": False}
+
+@app.get("/host/health")
+def health():
+    import time
+    last_ts = last_report_time()
+    return {
+        "alive": True,
+        "last_report_unix": last_ts,
+        "last_report_ago_sec": (time.time() - last_ts) if last_ts > 0 else None
+    }
