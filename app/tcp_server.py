@@ -9,6 +9,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def _debug(msg: str, *args) -> None:
+    """Log and print debug messages to the console."""
+    logger.debug(msg, *args)
+    if logger.isEnabledFor(logging.DEBUG):
+        try:
+            print("[DEBUG]" , msg % args if args else msg)
+        except Exception:
+            # Fallback in case of formatting issues
+            print("[DEBUG]", msg, *args)
+
 _last_report_ts = 0.0
 _client_conn: Optional[socket.socket] = None
 _conn_lock = threading.Lock()
@@ -32,8 +43,10 @@ def _send_cmd(cmd: str) -> bool:
             return False
         try:
             _client_conn.sendall((cmd + "\r\n").encode())
+            _debug("Sent command: %s", cmd)
             return True
         except Exception:
+            _debug("Failed to send command: %s", cmd)
             return False
 
 
@@ -72,23 +85,23 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         line_s = line.decode(errors="ignore").strip()
                         if not line_s:
                             continue
-                        logger.debug("Raw line: %s", line_s)
+                        _debug("Raw line: %s", line_s)
                         _set_report_ts()
                         rec = parse_dfai_line(line_s)
                         if rec:
-                            logger.debug("Parsed DFAI: %s", rec)
+                            _debug("Parsed DFAI: %s", rec)
                             if "_schema" not in rec:
                                 data_store.upsert_zone(rec)
                             continue
                         rec = parse_dfas_line(line_s)
                         if rec:
-                            logger.debug("Parsed DFAS: %s", rec)
+                            _debug("Parsed DFAS: %s", rec)
                             if "_schema" not in rec:
                                 data_store.upsert_zone_status(rec)
                             continue
                         evt = parse_cwmsg_line(line_s)
                         if evt:
-                            logger.debug("Parsed CWMSG: %s", evt)
+                            _debug("Parsed CWMSG: %s", evt)
                             data_store.add_event(evt, line_s)
                             continue
                         if line_s == "AT":
@@ -98,7 +111,7 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         elif line_s.startswith("AT+AUTH"):
                             conn.sendall(b"+AUTH: SERVER_AUTH_ID\r\nOK\r\n")
                         else:
-                            logger.debug("Unhandled line: %s", line_s)
+                            _debug("Unhandled line: %s", line_s)
                             conn.sendall(b"OK\r\n")
                 except socket.timeout:
                     continue
