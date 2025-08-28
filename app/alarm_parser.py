@@ -15,7 +15,7 @@ def parse_dfai_line(line: str) -> Optional[Dict[str, Any]]:
             "id": int(fields[0]),
             "io": fields[1],
             "ena": int(fields[2]),
-            "type": int(fields[3]),
+            "type": fields[3],
             "code": int(fields[4]),
             "team": int(fields[5]),
             "name": fields[6] if len(fields) > 6 else ""
