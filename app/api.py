@@ -6,26 +6,39 @@ from .tcp_server import (
     disarm_zone,
     arm_host,
     disarm_host,
+    log_http_data,
 )
 
 app = FastAPI(title="Alarm Host API", version="1.0.0")
 
 @app.get("/zones")
 def get_zones():
-    return data_store.fetch_zones()
+    zones = data_store.fetch_zones()
+    if not zones:
+        log_http_data()
+    return zones
 
 @app.get("/zone-status")
 def get_zone_status():
-    return data_store.fetch_zone_status()
+    status = data_store.fetch_zone_status()
+    if not status:
+        log_http_data()
+    return status
 
 @app.get("/events")
 def get_events(limit: int = Query(50, ge=1, le=1000)):
-    return data_store.fetch_events(limit=limit)
+    events = data_store.fetch_events(limit=limit)
+    if not events:
+        log_http_data()
+    return events
 
 
 @app.get("/host/info")
 def host_info():
-    return data_store.fetch_host_info()
+    info = data_store.fetch_host_info()
+    if not info:
+        log_http_data()
+    return info
 
 
 @app.post("/zones/{zone_id}/arm")

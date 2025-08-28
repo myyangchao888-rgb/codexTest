@@ -72,6 +72,18 @@ def disarm_host() -> bool:
     return _send_cmd("AT+CDAM=1")
 
 
+def log_http_data() -> None:
+    """Print a snapshot of data exposed via HTTP endpoints."""
+    snapshot = {
+        "zones": data_store.fetch_zones(),
+        "zone_status": data_store.fetch_zone_status(),
+        "events": data_store.fetch_events(),
+        "host_info": data_store.fetch_host_info(),
+    }
+    logger.info("HTTP snapshot: %s", snapshot)
+    _debug("HTTP snapshot: %s", snapshot)
+
+
 def handle_client(conn: socket.socket, addr: Tuple[str, int]):
     logger.info("Client connected: %s", addr)
     _set_client(conn)
