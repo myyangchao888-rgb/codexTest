@@ -3,7 +3,10 @@ from typing import Tuple, Optional
 from . import config, data_store
 from .alarm_parser import parse_dfai_line, parse_dfas_line, parse_cwmsg_line
 
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
+    format="[%(levelname)s] %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 _last_report_ts = 0.0
@@ -69,19 +72,23 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         line_s = line.decode(errors="ignore").strip()
                         if not line_s:
                             continue
+                        logger.debug("Raw line: %s", line_s)
                         _set_report_ts()
                         rec = parse_dfai_line(line_s)
                         if rec:
+                            logger.debug("Parsed DFAI: %s", rec)
                             if "_schema" not in rec:
                                 data_store.upsert_zone(rec)
                             continue
                         rec = parse_dfas_line(line_s)
                         if rec:
+                            logger.debug("Parsed DFAS: %s", rec)
                             if "_schema" not in rec:
                                 data_store.upsert_zone_status(rec)
                             continue
                         evt = parse_cwmsg_line(line_s)
                         if evt:
+                            logger.debug("Parsed CWMSG: %s", evt)
                             data_store.add_event(evt, line_s)
                             continue
                         if line_s == "AT":
@@ -91,6 +98,7 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         elif line_s.startswith("AT+AUTH"):
                             conn.sendall(b"+AUTH: SERVER_AUTH_ID\r\nOK\r\n")
                         else:
+                            logger.debug("Unhandled line: %s", line_s)
                             conn.sendall(b"OK\r\n")
                 except socket.timeout:
                     continue

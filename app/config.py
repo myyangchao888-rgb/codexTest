@@ -8,3 +8,6 @@ TCP_PORT = int(os.getenv("TCP_PORT", "8899"))
 
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("API_PORT", "8000"))
+
+# Logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()

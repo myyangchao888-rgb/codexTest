@@ -13,6 +13,10 @@
 
 TCP 监听端口由 `.env` 中的配置决定，HTTP API 默认在 <http://localhost:8000> 提供访问。
 
+### 调试
+
+如需查看解析详情，可在 `.env` 中设置 `LOG_LEVEL=DEBUG`，启动后控制台会输出每条报文及其解析结果，便于排查 HTTP 接口无数据的原因。
+
 ## HTTP API 示例
 
 - `GET /zones` 获取所有防区
