@@ -1,5 +1,8 @@
-import socket, threading, time, logging
-from typing import Tuple, Optional
+import socket
+import threading
+import time
+import logging
+from typing import Tuple, Optional, List
 from . import config, data_store
 from .alarm_parser import parse_dfai_line, parse_dfas_line, parse_cwmsg_line
 
@@ -11,88 +14,98 @@ logger = logging.getLogger(__name__)
 
 
 def _debug(msg: str, *args) -> None:
-    """Log and print debug messages to the console."""
     logger.debug(msg, *args)
     if logger.isEnabledFor(logging.DEBUG):
         try:
-            print("[DEBUG]" , msg % args if args else msg)
+            print("[DEBUG]", msg % args if args else msg)
         except Exception:
-            # Fallback in case of formatting issues
             print("[DEBUG]", msg, *args)
 
-_last_report_ts = 0.0
-_client_conn: Optional[socket.socket] = None
+
+_clients: dict[str, socket.socket] = {}
+_last_report_ts: dict[str, float] = {}
 _conn_lock = threading.Lock()
 
-def _set_report_ts():
-    global _last_report_ts
-    _last_report_ts = time.time()
 
-def last_report_time() -> float:
-    return _last_report_ts
-
-def _set_client(conn: Optional[socket.socket]) -> None:
-    global _client_conn
+def _send_cmd(host_id: str, cmd: str) -> bool:
     with _conn_lock:
-        _client_conn = conn
+        conn = _clients.get(host_id)
+    if not conn:
+        return False
+    try:
+        conn.sendall((cmd + "\r\n").encode())
+        _debug("Sent to %s: %s", host_id, cmd)
+        return True
+    except Exception:
+        _debug("Failed send to %s: %s", host_id, cmd)
+        return False
 
 
-def _send_cmd(cmd: str) -> bool:
-    with _conn_lock:
-        if not _client_conn:
-            return False
-        try:
-            _client_conn.sendall((cmd + "\r\n").encode())
-            _debug("Sent command: %s", cmd)
-            return True
-        except Exception:
-            _debug("Failed to send command: %s", cmd)
-            return False
-
-
-def arm_zone(zone_id: int) -> bool:
-    if _send_cmd(f"AT+ARM={zone_id},1"):
-        data_store.set_zone_arm(zone_id, 1)
+def arm_zone(host_id: str, zone_id: int) -> bool:
+    if _send_cmd(host_id, f"AT+ARM={zone_id},1"):
+        data_store.set_zone_arm(host_id, zone_id, 1)
         return True
     return False
 
 
-def disarm_zone(zone_id: int) -> bool:
-    if _send_cmd(f"AT+ARM={zone_id},0"):
-        data_store.set_zone_arm(zone_id, 0)
+def disarm_zone(host_id: str, zone_id: int) -> bool:
+    if _send_cmd(host_id, f"AT+ARM={zone_id},0"):
+        data_store.set_zone_arm(host_id, zone_id, 0)
         return True
     return False
 
 
-def arm_host() -> bool:
-    return _send_cmd("AT+CARM=1")
+def arm_host(host_id: str) -> bool:
+    return _send_cmd(host_id, "AT+CARM=1")
 
 
-def disarm_host() -> bool:
-    return _send_cmd("AT+CDAM=1")
+def disarm_host(host_id: str) -> bool:
+    return _send_cmd(host_id, "AT+CDAM=1")
 
 
-def log_http_data() -> None:
-    """Print a snapshot of data exposed via HTTP endpoints."""
+def last_report_time(host_id: str) -> float:
+    return _last_report_ts.get(host_id, 0.0)
+
+
+def _set_report_ts(host_id: str) -> None:
+    _last_report_ts[host_id] = time.time()
+
+
+def connected_hosts() -> List[str]:
+    with _conn_lock:
+        return list(_clients.keys())
+
+
+def log_http_data(host_id: str) -> None:
     snapshot = {
-        "zones": data_store.fetch_zones(),
-        "zone_status": data_store.fetch_zone_status(),
-        "events": data_store.fetch_events(),
-        "host_info": data_store.fetch_host_info(),
+        "zones": data_store.fetch_zones(host_id),
+        "zone_status": data_store.fetch_zone_status(host_id),
+        "events": data_store.fetch_events(host_id),
+        "host_info": data_store.fetch_host_info(host_id),
     }
-    logger.info("HTTP snapshot: %s", snapshot)
-    _debug("HTTP snapshot: %s", snapshot)
+    logger.info("HTTP snapshot[%s]: %s", host_id, snapshot)
+    _debug("HTTP snapshot[%s]: %s", host_id, snapshot)
+
+
+def _send_raw(conn: socket.socket, cmd: str) -> bool:
+    try:
+        conn.sendall((cmd + "\r\n").encode())
+        _debug("Sent command: %s", cmd)
+        return True
+    except Exception:
+        _debug("Failed to send command: %s", cmd)
+        return False
 
 
 def handle_client(conn: socket.socket, addr: Tuple[str, int]):
     logger.info("Client connected: %s", addr)
-    _set_client(conn)
     conn.settimeout(300)
     stop_keepalive = threading.Event()
+    host_id: Optional[str] = None
 
-    def keepalive_loop():
-        while not stop_keepalive.is_set():
-            if not _send_cmd("AT+CWMSG="):
+    def keepalive_loop() -> None:
+        while not stop_keepalive.is_set() and host_id:
+            if not _send_cmd(host_id, "AT+CWMSG="):
                 break
             for _ in range(int(config.CWMSG_KEEPALIVE_SEC)):
                 if stop_keepalive.is_set():
@@ -101,26 +114,22 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
 
     try:
         with conn:
-            if _send_cmd("ATI"):
-                logger.info("Sent ATI to client %s", addr)
-            else:
-                logger.warning("Failed to send ATI to client %s", addr)
+            _send_raw(conn, "ATI")
             time.sleep(0.1)
-            _send_cmd("AT+AUTH=")
+            _send_raw(conn, "AT+AUTH=")
             time.sleep(0.1)
-            _send_cmd("AT+CWMSG=SET,0,0,60,5,1,1")
-            # Query zone information and status on connect
+            _send_raw(conn, "AT+CWMSG=SET,0,0,60,5,1,1")
             time.sleep(0.1)
-            _send_cmd("AT+DFAI?")
+            _send_raw(conn, "AT+DFAI?")
             time.sleep(0.1)
-            _send_cmd("AT+DFAI=")
+            _send_raw(conn, "AT+DFAI=")
             time.sleep(0.1)
-            _send_cmd("AT+DFAS?")
+            _send_raw(conn, "AT+DFAS?")
             time.sleep(0.1)
-            _send_cmd("AT+DFAS=")
+            _send_raw(conn, "AT+DFAS=")
 
-            threading.Thread(target=keepalive_loop, daemon=True).start()
             buff = b""
+            keepalive_started = False
             while True:
                 try:
                     data = conn.recv(4096)
@@ -137,48 +146,57 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                             continue
                         logger.info("Device data: %s", line_s)
                         _debug("Raw line: %s", line_s)
-                        _set_report_ts()
+                        if host_id:
+                            _set_report_ts(host_id)
                         if line_s.startswith("ID:"):
-                            data_store.set_host_info("id", line_s.split(":", 1)[1].strip())
+                            host_id = line_s.split(":", 1)[1].strip()
+                            data_store.set_host_info(host_id, "id", host_id)
+                            with _conn_lock:
+                                _clients[host_id] = conn
+                            if not keepalive_started:
+                                threading.Thread(target=keepalive_loop, daemon=True).start()
+                                keepalive_started = True
+                            continue
+                        if not host_id:
                             continue
                         if line_s.startswith("OEM:"):
-                            data_store.set_host_info("oem", line_s.split(":", 1)[1].strip())
+                            data_store.set_host_info(host_id, "oem", line_s.split(":", 1)[1].strip())
                             continue
                         if line_s.startswith("MODEL:"):
-                            data_store.set_host_info("model", line_s.split(":", 1)[1].strip())
+                            data_store.set_host_info(host_id, "model", line_s.split(":", 1)[1].strip())
                             continue
                         if line_s.startswith("VERSION:"):
-                            data_store.set_host_info("version", line_s.split(":", 1)[1].strip())
+                            data_store.set_host_info(host_id, "version", line_s.split(":", 1)[1].strip())
                             continue
                         if line_s.startswith("+AUTH:"):
-                            data_store.set_host_info("auth_code", line_s.split(":", 1)[1].strip())
+                            data_store.set_host_info(host_id, "auth_code", line_s.split(":", 1)[1].strip())
                             continue
                         rec = parse_dfai_line(line_s)
                         if rec:
-                            logger.info("DFAI: %s", rec)
+                            logger.info("DFAI[%s]: %s", host_id, rec)
                             _debug("Parsed DFAI: %s", rec)
                             if "_schema" in rec:
-                                data_store.set_zone_schema(rec["_schema"])
+                                data_store.set_zone_schema(host_id, rec["_schema"])
                             else:
-                                data_store.upsert_zone(rec)
+                                data_store.upsert_zone(host_id, rec)
                             continue
                         rec = parse_dfas_line(line_s)
                         if rec:
-                            logger.info("DFAS: %s", rec)
+                            logger.info("DFAS[%s]: %s", host_id, rec)
                             _debug("Parsed DFAS: %s", rec)
                             if "_schema" in rec:
-                                data_store.set_zone_status_schema(rec["_schema"])
+                                data_store.set_zone_status_schema(host_id, rec["_schema"])
                             else:
-                                data_store.upsert_zone_status(rec)
+                                data_store.upsert_zone_status(host_id, rec)
                             continue
                         evt = parse_cwmsg_line(line_s)
                         if evt:
-                            logger.info("CWMSG: %s", evt)
+                            logger.info("CWMSG[%s]: %s", host_id, evt)
                             _debug("Parsed CWMSG: %s", evt)
-                            data_store.add_event(evt, line_s)
+                            data_store.add_event(host_id, evt, line_s)
                             msg_id = evt.get("msg_id")
                             if msg_id is not None:
-                                _send_cmd(f"AT+CWMSG={msg_id}")
+                                _send_cmd(host_id, f"AT+CWMSG={msg_id}")
                             continue
                         if line_s == "AT":
                             conn.sendall(b"OK\r\n")
@@ -187,7 +205,7 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         elif line_s.startswith("AT+AUTH"):
                             conn.sendall(b"+AUTH: SERVER_AUTH_ID\r\nOK\r\n")
                         else:
-                            logger.info("Unhandled line: %s", line_s)
+                            logger.info("Unhandled line[%s]: %s", host_id, line_s)
                             _debug("Unhandled line: %s", line_s)
                             conn.sendall(b"OK\r\n")
                 except socket.timeout:
@@ -196,17 +214,19 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                     logger.exception("Error handling client %s", addr)
                     return
     finally:
-        _set_client(None)
         stop_keepalive.set()
+        if host_id:
+            with _conn_lock:
+                _clients.pop(host_id, None)
 
-def start_tcp_server():
-    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    srv.bind((config.TCP_HOST, config.TCP_PORT))
-    srv.listen(20)
+
+def start_tcp_server() -> None:
+    """Start the TCP server and accept incoming connections."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((config.TCP_HOST, config.TCP_PORT))
+    server.listen()
     logger.info("Listening on %s:%s", config.TCP_HOST, config.TCP_PORT)
     while True:
-        conn, addr = srv.accept()
-        logger.info("Accepted connection from %s", addr)
-        t = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
-        t.start()
+        conn, addr = server.accept()
+        threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
