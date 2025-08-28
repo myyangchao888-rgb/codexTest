@@ -88,12 +88,27 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
     logger.info("Client connected: %s", addr)
     _set_client(conn)
     conn.settimeout(300)
+    stop_keepalive = threading.Event()
+
+    def keepalive_loop():
+        while not stop_keepalive.is_set():
+            if not _send_cmd("AT+CWMSG="):
+                break
+            for _ in range(int(config.CWMSG_KEEPALIVE_SEC)):
+                if stop_keepalive.is_set():
+                    return
+                time.sleep(1)
+
     try:
         with conn:
             if _send_cmd("ATI"):
                 logger.info("Sent ATI to client %s", addr)
             else:
                 logger.warning("Failed to send ATI to client %s", addr)
+            time.sleep(0.1)
+            _send_cmd("AT+AUTH=")
+            time.sleep(0.1)
+            _send_cmd("AT+CWMSG=SET,0,0,60,5,1,1")
             # Query zone information and status on connect
             time.sleep(0.1)
             _send_cmd("AT+DFAI?")
@@ -103,6 +118,8 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
             _send_cmd("AT+DFAS?")
             time.sleep(0.1)
             _send_cmd("AT+DFAS=")
+
+            threading.Thread(target=keepalive_loop, daemon=True).start()
             buff = b""
             while True:
                 try:
@@ -133,6 +150,9 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         if line_s.startswith("VERSION:"):
                             data_store.set_host_info("version", line_s.split(":", 1)[1].strip())
                             continue
+                        if line_s.startswith("+AUTH:"):
+                            data_store.set_host_info("auth_code", line_s.split(":", 1)[1].strip())
+                            continue
                         rec = parse_dfai_line(line_s)
                         if rec:
                             logger.info("DFAI: %s", rec)
@@ -156,6 +176,9 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                             logger.info("CWMSG: %s", evt)
                             _debug("Parsed CWMSG: %s", evt)
                             data_store.add_event(evt, line_s)
+                            msg_id = evt.get("msg_id")
+                            if msg_id is not None:
+                                _send_cmd(f"AT+CWMSG={msg_id}")
                             continue
                         if line_s == "AT":
                             conn.sendall(b"OK\r\n")
@@ -174,6 +197,7 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                     return
     finally:
         _set_client(None)
+        stop_keepalive.set()
 
 def start_tcp_server():
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -11,3 +11,6 @@ API_PORT = int(os.getenv("API_PORT", "8000"))
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# Interval in seconds to send AT+CWMSG= keepalive commands
+CWMSG_KEEPALIVE_SEC = int(os.getenv("CWMSG_KEEPALIVE_SEC", "200"))
