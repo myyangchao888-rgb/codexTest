@@ -151,6 +151,8 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         if line_s.startswith("ID:"):
                             host_id = line_s.split(":", 1)[1].strip()
                             data_store.set_host_info(host_id, "id", host_id)
+                            data_store.set_host_info(host_id, "ip", addr[0])
+                            data_store.set_host_info(host_id, "port", addr[1])
                             with _conn_lock:
                                 _clients[host_id] = conn
                             if not keepalive_started:

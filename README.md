@@ -20,7 +20,7 @@ TCP 监听端口由 `.env` 中的配置决定，HTTP API 默认在 <http://local
 
 ## HTTP API 示例
 
-- `GET /devices` 获取当前所有已连接的设备
+- `GET /devices` 获取当前所有已连接的设备（含 IP 与端口）
 - `GET /devices/{id}/zones` 获取指定设备的防区信息
 - `GET /devices/{id}/zone-status` 获取指定设备的防区状态
 - `GET /devices/{id}/events` 查看指定设备的最近事件
