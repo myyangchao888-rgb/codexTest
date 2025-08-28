@@ -1,6 +1,12 @@
 from fastapi import FastAPI, Query, HTTPException
 from . import data_store
-from .tcp_server import last_report_time, arm_zone, disarm_zone
+from .tcp_server import (
+    last_report_time,
+    arm_zone,
+    disarm_zone,
+    arm_host,
+    disarm_host,
+)
 
 app = FastAPI(title="Alarm Host API", version="1.0.0")
 
@@ -17,6 +23,11 @@ def get_events(limit: int = Query(50, ge=1, le=1000)):
     return data_store.fetch_events(limit=limit)
 
 
+@app.get("/host/info")
+def host_info():
+    return data_store.fetch_host_info()
+
+
 @app.post("/zones/{zone_id}/arm")
 def http_arm_zone(zone_id: int):
     if not arm_zone(zone_id):
@@ -29,6 +40,20 @@ def http_disarm_zone(zone_id: int):
     if not disarm_zone(zone_id):
         raise HTTPException(status_code=503, detail="alarm host not connected")
     return {"zone_id": zone_id, "armed": False}
+
+
+@app.post("/host/arm")
+def http_arm_host():
+    if not arm_host():
+        raise HTTPException(status_code=503, detail="alarm host not connected")
+    return {"armed": True}
+
+
+@app.post("/host/disarm")
+def http_disarm_host():
+    if not disarm_host():
+        raise HTTPException(status_code=503, detail="alarm host not connected")
+    return {"armed": False}
 
 @app.get("/host/health")
 def health():

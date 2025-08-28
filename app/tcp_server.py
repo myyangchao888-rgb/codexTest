@@ -64,6 +64,14 @@ def disarm_zone(zone_id: int) -> bool:
     return False
 
 
+def arm_host() -> bool:
+    return _send_cmd("AT+CARM=1")
+
+
+def disarm_host() -> bool:
+    return _send_cmd("AT+CDAM=1")
+
+
 def handle_client(conn: socket.socket, addr: Tuple[str, int]):
     logger.info("Client connected: %s", addr)
     _set_client(conn)
@@ -74,6 +82,15 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                 logger.info("Sent ATI to client %s", addr)
             else:
                 logger.warning("Failed to send ATI to client %s", addr)
+            # Query zone information and status on connect
+            time.sleep(0.1)
+            _send_cmd("AT+DFAI?")
+            time.sleep(0.1)
+            _send_cmd("AT+DFAI=")
+            time.sleep(0.1)
+            _send_cmd("AT+DFAS?")
+            time.sleep(0.1)
+            _send_cmd("AT+DFAS=")
             buff = b""
             while True:
                 try:
@@ -92,18 +109,34 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         logger.info("Device data: %s", line_s)
                         _debug("Raw line: %s", line_s)
                         _set_report_ts()
+                        if line_s.startswith("ID:"):
+                            data_store.set_host_info("id", line_s.split(":", 1)[1].strip())
+                            continue
+                        if line_s.startswith("OEM:"):
+                            data_store.set_host_info("oem", line_s.split(":", 1)[1].strip())
+                            continue
+                        if line_s.startswith("MODEL:"):
+                            data_store.set_host_info("model", line_s.split(":", 1)[1].strip())
+                            continue
+                        if line_s.startswith("VERSION:"):
+                            data_store.set_host_info("version", line_s.split(":", 1)[1].strip())
+                            continue
                         rec = parse_dfai_line(line_s)
                         if rec:
                             logger.info("DFAI: %s", rec)
                             _debug("Parsed DFAI: %s", rec)
-                            if "_schema" not in rec:
+                            if "_schema" in rec:
+                                data_store.set_zone_schema(rec["_schema"])
+                            else:
                                 data_store.upsert_zone(rec)
                             continue
                         rec = parse_dfas_line(line_s)
                         if rec:
                             logger.info("DFAS: %s", rec)
                             _debug("Parsed DFAS: %s", rec)
-                            if "_schema" not in rec:
+                            if "_schema" in rec:
+                                data_store.set_zone_status_schema(rec["_schema"])
+                            else:
                                 data_store.upsert_zone_status(rec)
                             continue
                         evt = parse_cwmsg_line(line_s)
