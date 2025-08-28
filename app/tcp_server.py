@@ -70,10 +70,10 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
     conn.settimeout(300)
     try:
         with conn:
-            if _send_cmd("UNKOWN"):
-                logger.info("Sent UNKOWN to client %s", addr)
+            if _send_cmd("ATI"):
+                logger.info("Sent ATI to client %s", addr)
             else:
-                logger.warning("Failed to send UNKOWN to client %s", addr)
+                logger.warning("Failed to send ATI to client %s", addr)
             buff = b""
             while True:
                 try:
