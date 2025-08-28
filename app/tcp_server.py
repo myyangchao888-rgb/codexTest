@@ -85,22 +85,26 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         line_s = line.decode(errors="ignore").strip()
                         if not line_s:
                             continue
+                        logger.info("Device data: %s", line_s)
                         _debug("Raw line: %s", line_s)
                         _set_report_ts()
                         rec = parse_dfai_line(line_s)
                         if rec:
+                            logger.info("DFAI: %s", rec)
                             _debug("Parsed DFAI: %s", rec)
                             if "_schema" not in rec:
                                 data_store.upsert_zone(rec)
                             continue
                         rec = parse_dfas_line(line_s)
                         if rec:
+                            logger.info("DFAS: %s", rec)
                             _debug("Parsed DFAS: %s", rec)
                             if "_schema" not in rec:
                                 data_store.upsert_zone_status(rec)
                             continue
                         evt = parse_cwmsg_line(line_s)
                         if evt:
+                            logger.info("CWMSG: %s", evt)
                             _debug("Parsed CWMSG: %s", evt)
                             data_store.add_event(evt, line_s)
                             continue
@@ -111,6 +115,7 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                         elif line_s.startswith("AT+AUTH"):
                             conn.sendall(b"+AUTH: SERVER_AUTH_ID\r\nOK\r\n")
                         else:
+                            logger.info("Unhandled line: %s", line_s)
                             _debug("Unhandled line: %s", line_s)
                             conn.sendall(b"OK\r\n")
                 except socket.timeout:
