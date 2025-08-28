@@ -1,7 +1,10 @@
-import socket, threading, time
+import socket, threading, time, logging
 from typing import Tuple, Optional
 from . import config, data_store
 from .alarm_parser import parse_dfai_line, parse_dfas_line, parse_cwmsg_line
+
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
 
 _last_report_ts = 0.0
 _client_conn: Optional[socket.socket] = None
@@ -46,6 +49,7 @@ def disarm_zone(zone_id: int) -> bool:
 
 
 def handle_client(conn: socket.socket, addr: Tuple[str, int]):
+    logger.info("Client connected: %s", addr)
     _set_client(conn)
     conn.settimeout(300)
     try:
@@ -91,6 +95,7 @@ def handle_client(conn: socket.socket, addr: Tuple[str, int]):
                 except socket.timeout:
                     continue
                 except Exception:
+                    logger.exception("Error handling client %s", addr)
                     return
     finally:
         _set_client(None)
@@ -100,9 +105,9 @@ def start_tcp_server():
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind((config.TCP_HOST, config.TCP_PORT))
     srv.listen(20)
-    print(f"[TCP] Listening on {config.TCP_HOST}:{config.TCP_PORT}")
+    logger.info("Listening on %s:%s", config.TCP_HOST, config.TCP_PORT)
     while True:
         conn, addr = srv.accept()
-        print(f"[TCP] Client connected: {addr}")
+        logger.info("Accepted connection from %s", addr)
         t = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
         t.start()
