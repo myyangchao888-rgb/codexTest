@@ -30,6 +30,43 @@ TCP 监听端口由 `.env` 中的配置决定，HTTP API 默认在 <http://local
 - `POST /devices/{id}/arm` 主机布防（语音提示）
 - `POST /devices/{id}/disarm` 主机撤防（语音提示）
 
+### 防区字段说明
+
+`GET /devices/{id}/zones` 返回的每条防区记录包含以下字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| id | 防区编号 |
+| io | 防区输入输出类型：I 表示输入型，O 表示输出型（警号驱动） |
+| io_desc | `io` 的中文描述 |
+| ena | 防区使能状态：1 表示正常，0 表示防区被禁止 |
+| ena_desc | `ena` 的中文描述 |
+| type | 防区类型代码 |
+| type_desc | 防区类型说明（见下表） |
+| code | 警情代码 |
+| team | 分组 |
+| name | 名称 |
+
+防区类型(`type`) 可选值及含义如下：
+
+| 类型 | 说明 |
+| --- | --- |
+| NORMAL | 普通 |
+| DELAY | 延时 |
+| A24H | 有声24小时 |
+| S24H | 无声24小时 |
+| INSIDE | 内部 |
+| PERM | 周界 |
+| EMERG | 紧急 |
+| FIRE | 火警 |
+| GAS | 燃气 |
+| MEDICAL | 医疗 |
+| BA24H | 24小时盗警 |
+| DOORBELL | 门铃 |
+| TAMPER | 防拆 |
+| REMOTER | 遥控器 |
+| KEYPAD | 键盘按钮 |
+
 ## 目录结构
 .
 ├─ app/

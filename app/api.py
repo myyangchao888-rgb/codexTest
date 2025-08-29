@@ -11,6 +11,26 @@ from .tcp_server import (
     last_report_time,
 )
 
+IO_DESC = {"I": "输入型防区", "O": "输出型防区"}
+ENA_DESC = {1: "正常", 0: "禁止"}
+TYPE_DESC = {
+    "NORMAL": "普通",
+    "DELAY": "延时",
+    "A24H": "有声24小时",
+    "S24H": "无声24小时",
+    "INSIDE": "内部",
+    "PERM": "周界",
+    "EMERG": "紧急",
+    "FIRE": "火警",
+    "GAS": "燃气",
+    "MEDICAL": "医疗",
+    "BA24H": "24小时盗警",
+    "DOORBELL": "门铃",
+    "TAMPER": "防拆",
+    "REMOTER": "遥控器",
+    "KEYPAD": "键盘按钮",
+}
+
 app = FastAPI(title="Alarm Host API", version="1.0.0")
 
 
@@ -29,6 +49,11 @@ def get_zones(host_id: str):
     zones = data_store.fetch_zones(host_id)
     if not zones:
         log_http_data(host_id)
+    else:
+        for z in zones:
+            z["io_desc"] = IO_DESC.get(z.get("io"), z.get("io"))
+            z["ena_desc"] = ENA_DESC.get(z.get("ena"), str(z.get("ena")))
+            z["type_desc"] = TYPE_DESC.get(z.get("type"), z.get("type"))
     return zones
 
 
