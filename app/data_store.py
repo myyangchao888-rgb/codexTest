@@ -68,7 +68,8 @@ def add_event(host_id: str, evt: Dict[str, Any], raw: str) -> None:
     event = {
         "ts": evt.get("ts"),
         "type": evt.get("type"),
-        "params": evt.get("params", []),
+        "type_desc": evt.get("type_desc", evt.get("type")),
+        "params": evt.get("params", {}),
         "raw": raw,
     }
     with _lock:

@@ -90,6 +90,37 @@ TCP 监听端口由 `.env` 中的配置决定，HTTP API 默认在 <http://local
 | TRIG | 防区触发状态 |
 | ALARM | 防区报警状态 |
 
+### 事件消息类型
+
+`GET /devices/{id}/events` 返回的每条事件记录包含字段：`ts`（时间戳）、`type`（消息类型代码）、`type_desc`（类型说明）、`params`（参数字典）以及 `raw`（原始报文）。
+
+常见消息类型及参数说明如下：
+
+| 类型 | 参数 | 说明 |
+| --- | --- | --- |
+| DFA_ALARM | zone, code | 防区报警 |
+| DFA_RESTORE | zone, code | 防区报警恢复 |
+| USER_SETARM | p1, p2, p3, p4, p5 | 用户布防 |
+| USER_DISARM | p1, p2, p3, p4, p5 | 用户撤防 |
+| DEV_ONLINE | dev | 子设备在线 |
+| DEV_OFFLINE | dev | 子设备掉线 |
+| DFA_BYPASS | dev, zone, user | 防区旁路 |
+| DFA_FORCE | dev, zone, user | 防区异常 |
+| POWERON | - | 设备启动 |
+| STAT_AC | state, source, voltage | 交流供电状态（state:0断开1正常，source:1交流/0直流） |
+| STAT_BAT | status, voltage | 电池状态（status:0丢失1连接2欠压3恢复） |
+| STAT_PSTN | status | 电话线状态（0无连接1正常） |
+| USER_LOGIN | login, dev, user | 用户登陆（login:1登陆0注销） |
+| SETTM | - | 配置修改 |
+| ZONE_TAMPER | zone, trig | 防区拆动（trig:1触发0恢复） |
+| ZONE_LOWBAT | zone, low | 电池低压（low:1低压0恢复） |
+| ZONE_ACLOSS | zone, loss | 防区断电（loss:1断电0恢复） |
+| ZONE_FAULT | zone, fault | 防区故障（fault:1故障0恢复） |
+| SYS_RESTART | - | 报警主机重启 |
+| SYS_HALT | - | 报警主机关闭 |
+| SYS_TAMPER | - | 报警主机拆动 |
+| COMMON | p1, p2 | 未定义消息 |
+
 ## 目录结构
 .
 ├─ app/
