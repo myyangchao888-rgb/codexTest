@@ -67,6 +67,29 @@ TCP 监听端口由 `.env` 中的配置决定，HTTP API 默认在 <http://local
 | REMOTER | 遥控器 |
 | KEYPAD | 键盘按钮 |
 
+### 防区状态字段说明
+
+`GET /devices/{id}/zone-status` 返回的每条记录包含：
+
+| 字段 | 说明 |
+| --- | --- |
+| id | 防区编号 |
+| arm | 布防标志：1 表示防区布防，0 表示撤防 |
+| arm_desc | `arm` 的中文描述 |
+| bypass | 旁路标志：1 表示防区被旁路，0 表示正常 |
+| bypass_desc | `bypass` 的中文描述 |
+| sta | 防区触发状态代码 |
+| sta_desc | `sta` 的中文描述（见下表） |
+| acnt | 报警次数 |
+
+防区触发状态(`sta`) 可选值及含义如下：
+
+| 状态 | 说明 |
+| --- | --- |
+| READY | 防区正常状态 |
+| TRIG | 防区触发状态 |
+| ALARM | 防区报警状态 |
+
 ## 目录结构
 .
 ├─ app/

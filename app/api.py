@@ -30,6 +30,13 @@ TYPE_DESC = {
     "REMOTER": "遥控器",
     "KEYPAD": "键盘按钮",
 }
+ARM_DESC = {1: "布防", 0: "撤防"}
+BYPASS_DESC = {1: "旁路", 0: "正常"}
+STA_DESC = {
+    "READY": "防区正常状态",
+    "TRIG": "防区触发状态",
+    "ALARM": "防区报警状态",
+}
 
 app = FastAPI(title="Alarm Host API", version="1.0.0")
 
@@ -62,6 +69,11 @@ def get_zone_status(host_id: str):
     status = data_store.fetch_zone_status(host_id)
     if not status:
         log_http_data(host_id)
+    else:
+        for s in status:
+            s["arm_desc"] = ARM_DESC.get(s.get("arm"), str(s.get("arm")))
+            s["bypass_desc"] = BYPASS_DESC.get(s.get("bypass"), str(s.get("bypass")))
+            s["sta_desc"] = STA_DESC.get(s.get("sta"), s.get("sta"))
     return status
 
 
