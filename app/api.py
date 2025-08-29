@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Query, HTTPException
 from typing import List
 from . import data_store
+from .alarm_parser import ALARM_CODE_DEFS
 from .tcp_server import (
     connected_hosts,
     arm_zone,
@@ -61,6 +62,10 @@ def get_zones(host_id: str):
             z["io_desc"] = IO_DESC.get(z.get("io"), z.get("io"))
             z["ena_desc"] = ENA_DESC.get(z.get("ena"), str(z.get("ena")))
             z["type_desc"] = TYPE_DESC.get(z.get("type"), z.get("type"))
+            code_def = ALARM_CODE_DEFS.get(z.get("code"))
+            if code_def:
+                z["code_desc"] = code_def.get("desc")
+                z["code_type"] = code_def.get("category")
     return zones
 
 
